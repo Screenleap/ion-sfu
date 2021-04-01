@@ -11,6 +11,7 @@ import (
 	"github.com/pion/rtcp"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v3"
+	med "github.com/pion/webrtc/v3/pkg/media"
 )
 
 // Receiver defines a interface for a track receivers
@@ -20,7 +21,7 @@ type Receiver interface {
 	Codec() webrtc.RTPCodecParameters
 	Kind() webrtc.RTPCodecType
 	SSRC(layer int) uint32
-	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool)
+	AddUpTrack(track *webrtc.TrackRemote, buffer *buffer.Buffer, bestQualityFirst bool, mw med.Writer)
 	AddDownTrack(track *DownTrack, bestQualityFirst bool)
 	SubDownTrack(track *DownTrack, layer int) error
 	GetBitrate() [3]uint64
@@ -94,7 +95,10 @@ func (w *WebRTCReceiver) Kind() webrtc.RTPCodecType {
 	return w.kind
 }
 
-func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool) {
+// mw: A webrtc/media.Writer that will get all RTP packets. Close will be
+// called when this receiver stops. Typical use case is recording the
+// audio/video to disk. Optional.
+func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buffer, bestQualityFirst bool, mw med.Writer) {
 	var layer int
 
 	switch track.RID() {
@@ -157,7 +161,7 @@ func (w *WebRTCReceiver) AddUpTrack(track *webrtc.TrackRemote, buff *buffer.Buff
 			}
 		}
 	}
-	go w.writeRTP(layer)
+	go w.writeRTP(layer, mw)
 
 }
 
@@ -319,10 +323,13 @@ func (w *WebRTCReceiver) RetransmitPackets(track *DownTrack, packets []packetMet
 	return nil
 }
 
-func (w *WebRTCReceiver) writeRTP(layer int) {
+func (w *WebRTCReceiver) writeRTP(layer int, mw med.Writer) {
 	defer func() {
 		w.closeOnce.Do(func() {
 			go w.closeTracks()
+			if mw != nil {
+				mw.Close()
+			}
 		})
 	}()
 	var del []int
@@ -346,6 +353,9 @@ func (w *WebRTCReceiver) writeRTP(layer int) {
 				w.downTracks[layer] = w.downTracks[layer][:len(w.downTracks[layer])-1]
 			}
 			del = del[:0]
+		}
+		if mw != nil {
+			mw.WriteRTP(&pkt.Packet)
 		}
 		w.locks[layer].Unlock()
 	}

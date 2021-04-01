@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pion/webrtc/v3"
+	med "github.com/pion/webrtc/v3/pkg/media"
 )
 
 type Publisher struct {
@@ -21,7 +22,7 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new Publisher
-func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publisher, error) {
+func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig, mw med.Writer) (*Publisher, error) {
 	me, err := getPublisherMediaEngine()
 	if err != nil {
 		Logger.Error(err, "NewPeer error", "peer_id", id)
@@ -52,7 +53,7 @@ func NewPublisher(session *Session, id string, cfg WebRTCTransportConfig) (*Publ
 			"stream_id", track.StreamID(),
 		)
 
-		if r, pub := p.router.AddReceiver(receiver, track); pub {
+		if r, pub := p.router.AddReceiver(receiver, track, mw); pub {
 			p.session.Publish(p.router, r)
 		}
 	})

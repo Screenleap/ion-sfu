@@ -8,12 +8,13 @@ import (
 	"github.com/pion/ion-sfu/pkg/twcc"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
+	med "github.com/pion/webrtc/v3/pkg/media"
 )
 
 // Router defines a track rtp/rtcp router
 type Router interface {
 	ID() string
-	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool)
+	AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, mw med.Writer) (Receiver, bool)
 	AddDownTracks(s *Subscriber, r Receiver) error
 	Stop()
 }
@@ -78,7 +79,7 @@ func (r *router) Stop() {
 	}
 }
 
-func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote) (Receiver, bool) {
+func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRemote, mw med.Writer) (Receiver, bool) {
 	r.Lock()
 	defer r.Unlock()
 
@@ -166,7 +167,7 @@ func (r *router) AddReceiver(receiver *webrtc.RTPReceiver, track *webrtc.TrackRe
 		publish = true
 	}
 
-	recv.AddUpTrack(track, buff, r.config.Simulcast.BestQualityFirst)
+	recv.AddUpTrack(track, buff, r.config.Simulcast.BestQualityFirst, mw)
 
 	buff.Bind(receiver.GetParameters(), buffer.Options{
 		MaxBitRate: r.config.MaxBandwidth,
